@@ -1,3 +1,0 @@
-from paraphraseator.DatasetParaphraseator import DatasetParaphraseator
-
-DatasetParaphraseator.train()
