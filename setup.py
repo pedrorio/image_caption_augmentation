@@ -12,7 +12,7 @@ except ImportError:  # for pip <= 9.0.3
     from pip.req import parse_requirements
     from pip import downloads
 
-VERSION = '0.0.5'
+VERSION = '0.0.6'
 
 # parse_requirements() returns generator of pip.req.InstallRequirement
 # objects
@@ -44,7 +44,8 @@ setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    python_requires='>=3.9.0',
+    python_requires='>=3.6.0',
+    # python_requires='>=3.9.0',
     license='MIT',
     install_requires=install_requires,
 )
