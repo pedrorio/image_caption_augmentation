@@ -88,7 +88,7 @@ class T5(LightningModule):
             # name=self.model_name_or_path,
             version="",
             default_hp_metric=False,
-            log_graph=True
+            log_graph=False
         )
 
         # self.config = T5Config.from_pretrained(
