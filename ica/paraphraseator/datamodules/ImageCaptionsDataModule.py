@@ -30,9 +30,6 @@ class ImageCaptionsDataModule(LightningDataModule):
         self.prepare_data()
         self.setup()
 
-        # num_train_epochs = 2,
-        # warmup_steps = 0,
-        # gradient_accumulation_steps = 16,
         # max_seq_length = 512,
 
     # def prepare_data(self):
@@ -52,7 +49,7 @@ class ImageCaptionsDataModule(LightningDataModule):
         full_len = len(full_dataset)  # size of first dim
         self.train_len = round(full_len * 0.7)
         self.val_len = round(full_len * 0.2)
-        self.test_len = round(full_len - val_len - train_len)
+        self.test_len = round(full_len - self.val_len - self.train_len)
 
         self.train_dataset, self.val_dataset, self.test_dataset = random_split(
             full_dataset,

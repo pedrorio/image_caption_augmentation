@@ -1,4 +1,4 @@
-from ica.paraphraseator.Paraphraseator import Paraphraseator
+from ica.paraphraseator.T5 import T5
 
-for dataset_name in Paraphraseator.DATASET_NAMES:
-    Paraphraseator(dataset_name).call()
+t5 = T5(accumulate_grad_batches=2, batch_size=4)
+t5.train_model()

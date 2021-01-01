@@ -12,7 +12,7 @@ except ImportError:  # for pip <= 9.0.3
     from pip.req import parse_requirements
     from pip import downloads
 
-VERSION = '0.0.2'
+VERSION = '0.0.3'
 
 # parse_requirements() returns generator of pip.req.InstallRequirement
 # objects
@@ -29,13 +29,9 @@ except AttributeError:  # for pip >= 20
 def read(filename):
     return open(os.path.join(os.path.dirname(__file__), filename)).read()
 
-#
-# with open("README.md", "r") as fh:
-#     long_description = fh.read()
-
 setup(
     name="ica",
-    version="0.0.1",
+    version=VERSION,
     author="Pedro Rio",
     author_email="pedrocacaisrio@gmail.com",
     description="A package to augment image captions",
@@ -48,25 +44,7 @@ setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    python_requires='>=3.9',
+    python_requires='>=3.9.0',
     license='MIT',
     install_requires=install_requires,
-    # install_requires=[
-    #     'pip',
-    #     'setuptools',
-    #     'wheel',
-    #     'nltk>=3.5',
-    #     'googletrans>=3.0.0',
-    #     'numpy',
-    #     'pandas',
-    #     'torch',
-    #     # 'torch>=1.6.0',
-    #     'torchvision',
-    #     'pytorch_lightning',
-    #     'transformers>=3.2.0',
-    #     'hyper',
-    #     'ipdb',
-    #     'toolz',
-    #     'sklearn'
-    # ]
 )

@@ -4,6 +4,7 @@ import itertools
 from torch.utils.data import Dataset
 from pandas import DataFrame
 from numpy import savez_compressed, load
+import requests
 
 
 class ImageCaptionsDataset(Dataset):
@@ -19,29 +20,17 @@ class ImageCaptionsDataset(Dataset):
         self.transform = transform
         self.file_path = file_path
 
-        if os.path.exists(f'{file_path}.npz'):
-            data = load(f'{file_path}.npz', allow_pickle=True)
-            # print(data.files)
-            self.x = data["x"]
-            self.y = data["y"]
-            self.name = data["name"]
-            self.n_samples = data["n_samples"]
+        if os.path.exists(f'{self.file_path}.npz'):
+            self.unpickle_data()
+        elif os.path.exists(self.file_path):
+            self.import_data()
+            self.pickle_data()
         else:
-            xy = self.import_data()
+            self.download_data()
+            self.import_data()
+            self.pickle_data()
 
-            self.name = xy.index.name
-            self.n_samples = len(xy.index)
-
-            self.x = xy["x"].to_numpy()
-            self.y = xy["y"].to_numpy()
-
-            savez_compressed(f'{file_path}.npz', x=self.x, y=self.y, name=self.name, n_samples=self.n_samples)
-
-        # print(file_path)
-        # print(self.x)
-        # print(self.y)
-        print(self.name)
-        print(self.n_samples)
+        print(f'{self.name}: {self.n_samples}')
 
     def __len__(self):
         return self.n_samples
@@ -52,7 +41,14 @@ class ImageCaptionsDataset(Dataset):
             sample = self.transform(sample)
         return sample
 
-    def import_data(self):
+    def download_data(self):
+        request = requests.get(
+            f'https://raw.githubusercontent.com/pedrorio/image_caption_augmentation/master/{self.file_path}'
+        )
+        with open(self.file_path, 'w') as fp:
+            json.dump(request.json(), fp)
+
+    def process_data(self):
         xy = DataFrame(columns=("x", "y"))
         with open(f'{self.file_path}', "r") as fp:
             data = json.load(fp)
@@ -68,3 +64,21 @@ class ImageCaptionsDataset(Dataset):
                     xy.loc[number_of_pairs] = [x, y]
                     number_of_pairs += 1
         return xy
+
+    def import_data(self):
+        xy = self.process_data()
+        self.name = xy.index.name
+        self.n_samples = len(xy.index)
+        self.x = xy["x"].to_numpy()
+        self.y = xy["y"].to_numpy()
+
+    def unpickle_data(self):
+        data = load(f'{self.file_path}.npz', allow_pickle=True)
+        # print(data.files)
+        self.x = data["x"]
+        self.y = data["y"]
+        self.name = data["name"]
+        self.n_samples = data["n_samples"]
+
+    def pickle_data(self):
+        savez_compressed(f'{self.file_path}.npz', x=self.x, y=self.y, name=self.name, n_samples=self.n_samples)

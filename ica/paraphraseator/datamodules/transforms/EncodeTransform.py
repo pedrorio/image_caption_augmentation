@@ -1,5 +1,7 @@
 from nltk.tokenize import word_tokenize
-from ....utils.EncodedSentence import EncodedSentence
+from ....utils.helpers import clean_sentence, annotate_sentence, encode_sentence
+import pdb
+
 
 class EncodeTransform:
     def __init__(self, tokenizer):
@@ -8,47 +10,15 @@ class EncodeTransform:
     def __call__(self, sample):
         x, y = sample
 
-        def clean_sentence(sentence):
-            tokens = word_tokenize(sentence)
-            words = [word.lower() for word in tokens if word.isalpha()]
-            sentence = f'{" ".join(words).capitalize()}.'
-            return sentence
+        clean_x = clean_sentence(x)
+        annotated_x = annotate_sentence(clean_x)
+        encoded_x = encode_sentence(self.tokenizer, annotated_x)
 
-        x = clean_sentence(x)
-        y = clean_sentence(y)
-
-        def annotate_source(x):
-            # return f'paraphrase: {x} </s>'
-            return f'paraphrase: {x}'
-
-        x = annotate_source(x)
-
-        def annotate_target(y):
-            # return f'{y} </s>'
-            return f'{y}'
-
-        y = annotate_target(y)
-
-        def encode(sentence):
-            encoded_sentence = self.tokenizer.batch_encode_plus(
-                [sentence],
-                max_length=512,
-                padding='max_length',
-                return_tensors="pt",
-                truncation=True
-            )
-            return encoded_sentence
-
-        x = encode(x)
-        y = encode(y)
-
-        x_inputs, x_attention = x.input_ids.squeeze(), x.attention_mask.squeeze()
-        y_inputs, y_attention = y.input_ids.squeeze(), y.attention_mask.squeeze()
+        clean_y = clean_sentence(y)
+        encoded_y = encode_sentence(self.tokenizer, y)
 
         sample = dict(
-            x_inputs=x_inputs,
-            x_attention=x_attention,
-            y_inputs=y_inputs,
-            y_attention=y_attention
+            x=x, clean_x=clean_x, annotated_x=annotated_x, encoded_x=encoded_x,
+            y=y, clean_y=clean_y, encoded_y=encoded_y,
         )
         return sample
