@@ -12,6 +12,6 @@ transformers>=3.5.0
 hyper
 toolz
 sklearn
-transformers-lightning # https://github.com/iKernels/transformers-lightning/archive/0.4.3.zip
+# transformers-lightning # https://github.com/iKernels/transformers-lightning/archive/0.4.3.zip
 sentencepiece
 requests
