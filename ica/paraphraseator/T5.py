@@ -293,16 +293,24 @@ class T5(LightningModule):
                 # LoggerCallback()
             ],
             default_root_dir=self.logs_dir,
-            log_every_n_steps=1,
+            log_every_n_steps=20,
             logger=self.logger,
         )
         self.trainer.test(model=self, datamodule=self.datamodule)
 
 
 def main():
-    t5 = T5(accumulate_grad_batches=4, batch_size=4)
-    t5.train_model()
+    t5 = T5(
+        gpus=1,
+        num_workers=4,
+        batch_size=4,
+        data_dir="/content/drive/MyDrive/ica/data/raw",
+        logs_dir="/content/drive/MyDrive/ica/data/logs",
+        cache_dir="/content/drive/MyDrive/ica/data/cache",
+        checkpoints_dir="/content/drive/MyDrive/ica/data/checkpoints"
+    )
 
+    t5.train_model()
 
 if __name__ == "__main__":
     main()

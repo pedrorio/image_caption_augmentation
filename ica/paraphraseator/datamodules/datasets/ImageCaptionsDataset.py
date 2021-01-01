@@ -46,7 +46,7 @@ class ImageCaptionsDataset(Dataset):
             f'https://raw.githubusercontent.com/pedrorio/image_caption_augmentation/master/{self.file_path}'
         )
         with open(self.file_path, 'w') as fp:
-            json.dump(request.json(), fp, indent=4)
+            json.dump(request.json(), fp)
 
     def process_data(self):
         xy = DataFrame(columns=("x", "y"))
