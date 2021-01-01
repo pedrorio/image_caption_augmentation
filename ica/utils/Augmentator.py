@@ -1,6 +1,6 @@
 import json
 from nltk.tokenize import word_tokenize
-from typing import Set, Dict, TypedDict, List, Union
+from typing import Set, Dict, List, Union
 from dataclasses import dataclass
 from .Image import Image
 from .Sentence import Sentence
