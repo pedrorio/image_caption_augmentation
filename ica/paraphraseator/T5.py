@@ -61,6 +61,11 @@ class T5(LightningModule):
         self.logs_dir = logs_dir
         self.checkpoints_dir = checkpoints_dir
 
+        os.makedirs(self.data_dir, exist_ok=True)
+        os.makedirs(self.cache_dir, exist_ok=True)
+        os.makedirs(self.logs_dir, exist_ok=True)
+        os.makedirs(self.checkpoints_dir, exist_ok=True)
+
         self.learning_rate = learning_rate
         self.adam_epsilon = adam_epsilon
         self.weight_decay = weight_decay
@@ -107,11 +112,6 @@ class T5(LightningModule):
             tokenizer=self.tokenizer,
             num_workers=self.num_workers
         )
-
-        os.makedirs(self.data_dir, exist_ok=True)
-        os.makedirs(self.cache_dir, exist_ok=True)
-        os.makedirs(self.logs_dir, exist_ok=True)
-        os.makedirs(self.checkpoints_dir, exist_ok=True)
 
         self.save_hyperparameters()
         self.logger.log_hyperparams(params=self.hparams)
