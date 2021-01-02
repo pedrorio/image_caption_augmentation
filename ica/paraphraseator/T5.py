@@ -270,7 +270,10 @@ class T5(LightningModule):
             callbacks=[
                 # checkpoint_callback(checkpoints_dir=self.checkpoints_dir),
                 # LoggerCallback()
-                CheckpointEveryNSteps(save_step_frequency=self.accumulate_grad_batches * self.batch_size * 1)
+                CheckpointEveryNSteps(
+                    save_step_frequency=self.accumulate_grad_batches * self.batch_size * 1,
+                    checkpoints_dir=self.checkpoints_dir
+                )
             ],
             default_root_dir=self.logs_dir,
             log_every_n_steps=1,
