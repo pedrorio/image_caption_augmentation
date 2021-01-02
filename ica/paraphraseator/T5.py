@@ -8,6 +8,7 @@ from transformers.modeling_outputs import Seq2SeqModelOutput
 from ica.paraphraseator.datamodules.ImageCaptionsDataModule import ImageCaptionsDataModule
 from ica.paraphraseator.callbacks.checkpoint_callback import checkpoint_callback
 from ica.paraphraseator.callbacks.LoggerCallback import LoggerCallback
+from ica.paraphraseator.callbacks.CheckpointEveryNSteps import CheckpointEveryNSteps
 from torch.utils.data import DataLoader, random_split
 from torchvision.transforms.transforms import Compose
 import os
@@ -24,8 +25,6 @@ import pdb
 seed_everything(42)
 
 
-# todo: clean padding tokens
-# todo: fix accumulate_grad_batches
 class T5(LightningModule):
     # required
     def __init__(
@@ -271,6 +270,7 @@ class T5(LightningModule):
             callbacks=[
                 # checkpoint_callback(checkpoints_dir=self.checkpoints_dir),
                 # LoggerCallback()
+                CheckpointEveryNSteps(save_step_frequency=self.accumulate_grad_batches * self.batch_size * 1)
             ],
             default_root_dir=self.logs_dir,
             log_every_n_steps=1,
@@ -303,15 +303,18 @@ class T5(LightningModule):
 
 def main():
     t5 = T5(
-        gpus=1,
-        num_workers=4,
-        batch_size=5,
-        data_dir="/content/drive/MyDrive/ica/data/raw",
-        logs_dir="/content/drive/MyDrive/ica/data/logs",
-        cache_dir="/content/drive/MyDrive/ica/data/cache",
-        checkpoints_dir="/content/drive/MyDrive/ica/data/checkpoints"
+        # gpus=1,
+        num_workers=8,
+        # num_workers=4,
+        batch_size=2,
+        accumulate_grad_batches=2,
+        # data_dir="/content/drive/MyDrive/ica/data/raw",
+        # logs_dir="/content/drive/MyDrive/ica/data/logs",
+        # cache_dir="/content/drive/MyDrive/ica/data/cache",
+        # checkpoints_dir="/content/drive/MyDrive/ica/data/checkpoints"
     )
     t5.train_model()
+
 
 if __name__ == "__main__":
     main()
