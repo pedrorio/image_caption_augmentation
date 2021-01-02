@@ -119,16 +119,16 @@ class T5(LightningModule):
     def forward(self,
                 input_ids,
                 attention_mask=None,
-                labels=None,
                 decoder_input_ids=None,
                 decoder_attention_mask=None,
+                labels=None,
                 ):
         return self.model(
             input_ids=input_ids,
             attention_mask=attention_mask,
-            labels=decoder_input_ids,
             decoder_input_ids=decoder_input_ids,
             decoder_attention_mask=decoder_attention_mask,
+            labels=decoder_input_ids,
         )
 
     # required
@@ -154,7 +154,7 @@ class T5(LightningModule):
         outputs = self.forward(
             input_ids=encoded_x.input_ids.squeeze(),
             attention_mask=encoded_x.attention_mask.squeeze(),
-            labels=encoded_y.input_ids.squeeze(),
+            # labels=encoded_y.input_ids.squeeze(),
             decoder_input_ids=encoded_y.input_ids.squeeze(),
             decoder_attention_mask=encoded_y.attention_mask.squeeze(),
         )
@@ -295,6 +295,8 @@ class T5(LightningModule):
             default_root_dir=self.logs_dir,
             log_every_n_steps=20,
             logger=self.logger,
+            progress_bar_refresh_rate=60,
+            val_check_interval=0.25
         )
         self.trainer.test(model=self, datamodule=self.datamodule)
 
@@ -303,13 +305,12 @@ def main():
     t5 = T5(
         gpus=1,
         num_workers=4,
-        batch_size=4,
+        batch_size=5,
         data_dir="/content/drive/MyDrive/ica/data/raw",
         logs_dir="/content/drive/MyDrive/ica/data/logs",
         cache_dir="/content/drive/MyDrive/ica/data/cache",
         checkpoints_dir="/content/drive/MyDrive/ica/data/checkpoints"
     )
-
     t5.train_model()
 
 if __name__ == "__main__":
