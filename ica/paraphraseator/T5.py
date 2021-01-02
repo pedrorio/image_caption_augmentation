@@ -83,7 +83,7 @@ class T5(LightningModule):
 
         self.logger = TensorBoardLogger(
             save_dir=self.logs_dir,
-            name="T5",
+            name="",
             # name=self.model_name_or_path,
             version="",
             default_hp_metric=False,
