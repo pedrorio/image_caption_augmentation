@@ -104,14 +104,11 @@ class T5(LightningModule):
             cache_dir=self.cache_dir
         )
 
-        if self.checkpoint_to_load is None:
-            self.model = T5ForConditionalGeneration.from_pretrained(
-                pretrained_model_name_or_path=self.model_name_or_path,
-                # config=self.config,
-                cache_dir=self.cache_dir
-            )
-        else:
-            self.model = self.load_from_checkpoint(f'{self.checkpoints_dir}/{self.checkpoint_to_load}')
+        self.model = T5ForConditionalGeneration.from_pretrained(
+            pretrained_model_name_or_path=self.model_name_or_path,
+            # config=self.config,
+            cache_dir=self.cache_dir
+        )
 
         self.datamodule = ImageCaptionsDataModule(
             batch_size=self.batch_size,
@@ -122,6 +119,9 @@ class T5(LightningModule):
 
         self.save_hyperparameters()
         self.logger.log_hyperparams(params=self.hparams)
+
+        if self.checkpoint_to_load is not None:
+            self.resume_from_checkpoint = f'{self.checkpoints_dir}/{self.checkpoint_to_load}'
 
     def forward(self,
                 input_ids,
@@ -286,7 +286,9 @@ class T5(LightningModule):
             default_root_dir=self.logs_dir,
             log_every_n_steps=1,
             logger=self.logger,
+            resume_from_checkpoint=self.resume_from_checkpoint
         )
+
         self.trainer.fit(model=self, datamodule=self.datamodule)
         self.model.save_pretrained(self.model_name_or_path)
         self.tokenizer.save_pretrained(self.model_name_or_path)
@@ -307,8 +309,10 @@ class T5(LightningModule):
             log_every_n_steps=20,
             logger=self.logger,
             progress_bar_refresh_rate=60,
-            val_check_interval=0.25
+            val_check_interval=0.25,
+            resume_from_checkpoint=self.resume_from_checkpoint
         )
+
         self.trainer.test(model=self, datamodule=self.datamodule)
 
 
@@ -323,7 +327,7 @@ def main():
         # logs_dir="/content/drive/MyDrive/ica/data/logs",
         # cache_dir="/content/drive/MyDrive/ica/data/cache",
         # checkpoints_dir="/content/drive/MyDrive/ica/data/checkpoints",
-        # last_checkpoint="EveryNStep=4_epoch=0_step=24.ckpt"
+        checkpoint_to_load="every=4_epoch=0_step=28.ckpt"
     )
     t5.train_model()
 
