@@ -120,8 +120,11 @@ class T5(LightningModule):
         self.save_hyperparameters()
         self.logger.log_hyperparams(params=self.hparams)
 
-        if self.checkpoint_to_load is not None:
+        if self.checkpoint_to_load is not None and self.checkpoints_dir is not None:
             self.resume_from_checkpoint = f'{self.checkpoints_dir}/{self.checkpoint_to_load}'
+
+        if self.checkpoints_dir is not None:
+            self.save_model_path = f'{self.checkpoints_dir}/{self.model_name_or_path}'
 
     def forward(self,
                 input_ids,
@@ -150,6 +153,14 @@ class T5(LightningModule):
         loss, gleau = self.shared_step(batch)
         self.log('val_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         self.log('val_gleau', gleau, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        return loss
+
+        # required
+
+    def test_step(self, batch, batch_idx, dataloader_idx=None, hiddens=None):
+        loss, gleau = self.shared_step(batch)
+        self.log('test_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        self.log('test_gleau', gleau, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         return loss
 
     def shared_step(self, batch) -> Seq2SeqModelOutput:
@@ -290,10 +301,10 @@ class T5(LightningModule):
         )
 
         self.trainer.fit(model=self, datamodule=self.datamodule)
-        self.model.save_pretrained(self.model_name_or_path)
-        self.tokenizer.save_pretrained(self.model_name_or_path)
+        self.model.save_pretrained(self.save_model_path)
+        self.tokenizer.save_pretrained(self.save_model_path)
 
-    def test_model(self, dataset):
+    def test_model(self):
         self.trainer = Trainer(
             accumulate_grad_batches=self.accumulate_grad_batches,
             max_epochs=self.max_epochs,
@@ -329,8 +340,18 @@ def main():
         # checkpoints_dir="/content/drive/MyDrive/ica/data/checkpoints",
         checkpoint_to_load="every=4_epoch=0_step=28.ckpt"
     )
+
+    t5 = T5.load_from_checkpoint(
+        "data/checkpoints/every=4_epoch=0_step=28.ckpt",
+        checkpoint_to_load="every=4_epoch=0_step=28.ckpt"
+    )
     t5.train_model()
 
 
 if __name__ == "__main__":
     main()
+
+    # t5 = T5.load_from_checkpoint("data/checkpoints/every=4_epoch=0_step=28.ckpt", checkpoint_to_load="every=4_epoch=0_step=28.ckpt")
+    t5 = T5.load_from_checkpoint("data/checkpoints/every=4_epoch=0_step=28.ckpt",
+                                 checkpoint_to_load="every=4_epoch=0_step=28.ckpt")
+    t5.train_model()
