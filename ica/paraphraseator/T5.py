@@ -42,6 +42,8 @@ class T5(LightningModule):
             weight_decay: float = 0.0,
             warmup_steps: int = 0,
 
+            checkpoint_to_load=None,
+
             # training params
             accumulate_grad_batches: int = 16,
             max_epochs: int = 2,
@@ -59,6 +61,8 @@ class T5(LightningModule):
         self.cache_dir = cache_dir
         self.logs_dir = logs_dir
         self.checkpoints_dir = checkpoints_dir
+
+        self.checkpoint_to_load = checkpoint_to_load
 
         os.makedirs(self.data_dir, exist_ok=True)
         os.makedirs(self.cache_dir, exist_ok=True)
@@ -99,11 +103,15 @@ class T5(LightningModule):
             pretrained_model_name_or_path=self.model_name_or_path,
             cache_dir=self.cache_dir
         )
-        self.model = T5ForConditionalGeneration.from_pretrained(
-            pretrained_model_name_or_path=self.model_name_or_path,
-            # config=self.config,
-            cache_dir=self.cache_dir
-        )
+
+        if self.checkpoint_to_load is None:
+            self.model = T5ForConditionalGeneration.from_pretrained(
+                pretrained_model_name_or_path=self.model_name_or_path,
+                # config=self.config,
+                cache_dir=self.cache_dir
+            )
+        else:
+            self.model = self.load_from_checkpoint(f'{self.checkpoints_dir}/{self.checkpoint_to_load}')
 
         self.datamodule = ImageCaptionsDataModule(
             batch_size=self.batch_size,
@@ -314,7 +322,8 @@ def main():
         # data_dir="/content/drive/MyDrive/ica/data/raw",
         # logs_dir="/content/drive/MyDrive/ica/data/logs",
         # cache_dir="/content/drive/MyDrive/ica/data/cache",
-        # checkpoints_dir="/content/drive/MyDrive/ica/data/checkpoints"
+        # checkpoints_dir="/content/drive/MyDrive/ica/data/checkpoints",
+        # last_checkpoint="EveryNStep=4_epoch=0_step=24.ckpt"
     )
     t5.train_model()
 

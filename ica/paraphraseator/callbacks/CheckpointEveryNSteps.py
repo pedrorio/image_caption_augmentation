@@ -25,6 +25,5 @@ class CheckpointEveryNSteps(Callback):
         epoch = trainer.current_epoch
         global_step = trainer.global_step
         if global_step % self.save_step_frequency == 0:
-            filename = f"EveryNStep={self.save_step_frequency}_epoch={epoch}_step={global_step}.ckpt"
-            ckpt_path = os.path.join(self.checkpoints_dir, filename)
-            trainer.save_checkpoint(ckpt_path)
+            file_path = f"{checkpoints_dir}/every={self.save_step_frequency}_epoch={epoch}_step={global_step}.ckpt"
+            trainer.save_checkpoint(file_path)
