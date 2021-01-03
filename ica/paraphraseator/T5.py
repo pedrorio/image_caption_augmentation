@@ -352,6 +352,6 @@ if __name__ == "__main__":
     main()
 
     # t5 = T5.load_from_checkpoint("data/checkpoints/every=4_epoch=0_step=28.ckpt", checkpoint_to_load="every=4_epoch=0_step=28.ckpt")
-    t5 = T5.load_from_checkpoint("data/checkpoints/every=4_epoch=0_step=28.ckpt",
-                                 checkpoint_to_load="every=4_epoch=0_step=28.ckpt")
-    t5.train_model()
+    # t5 = T5.load_from_checkpoint("data/checkpoints/every=4_epoch=0_step=28.ckpt",
+    #                              checkpoint_to_load="every=4_epoch=0_step=28.ckpt")
+    # t5.train_model()
