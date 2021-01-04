@@ -42,9 +42,6 @@ class CheckpointEveryNSteps(Callback):
             if file_epoch_step < max_epoch_step:
                 files_to_delete.append(file)
 
-        print(max_epoch_step)
-        print(files_to_delete)
-
         for file in files_to_delete:
             remove(join(self.checkpoints_dir, file))
 
