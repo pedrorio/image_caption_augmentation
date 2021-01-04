@@ -122,6 +122,8 @@ class T5(LightningModule):
 
         if self.checkpoint_to_load is not None and self.checkpoints_dir is not None:
             self.resume_from_checkpoint = f'{self.checkpoints_dir}/{self.checkpoint_to_load}'
+        else:
+            self.resume_from_checkpoint = None
 
         if self.checkpoints_dir is not None:
             self.save_model_path = f'{self.checkpoints_dir}/{self.model_name_or_path}'
@@ -338,20 +340,11 @@ def main():
         # logs_dir="/content/drive/MyDrive/ica/data/logs",
         # cache_dir="/content/drive/MyDrive/ica/data/cache",
         # checkpoints_dir="/content/drive/MyDrive/ica/data/checkpoints",
-        checkpoint_to_load="every=4_epoch=0_step=28.ckpt"
+        # checkpoint_to_load="every=4_epoch=0_step=28.ckpt"
     )
 
-    t5 = T5.load_from_checkpoint(
-        "data/checkpoints/every=4_epoch=0_step=28.ckpt",
-        checkpoint_to_load="every=4_epoch=0_step=28.ckpt"
-    )
     t5.train_model()
 
 
 if __name__ == "__main__":
     main()
-
-    # t5 = T5.load_from_checkpoint("data/checkpoints/every=4_epoch=0_step=28.ckpt", checkpoint_to_load="every=4_epoch=0_step=28.ckpt")
-    # t5 = T5.load_from_checkpoint("data/checkpoints/every=4_epoch=0_step=28.ckpt",
-    #                              checkpoint_to_load="every=4_epoch=0_step=28.ckpt")
-    # t5.train_model()
