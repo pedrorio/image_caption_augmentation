@@ -1,8 +1,6 @@
 import os
 import logging
-from pytorch_lightning import Callback, seed_everything
-
-seed_everything(42)
+from pytorch_lightning import Callback
 
 
 class LoggerCallback(Callback):

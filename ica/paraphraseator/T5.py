@@ -1,349 +1,334 @@
-import torch
-# import torch_xla
-# import torch_xla.core.xla_model as xm
-from pytorch_lightning import LightningModule, seed_everything, Trainer
-# from transformers import T5Config
-from transformers import AdamW, T5ForConditionalGeneration, T5Tokenizer, get_linear_schedule_with_warmup
-from transformers.modeling_outputs import Seq2SeqModelOutput
-from ica.paraphraseator.datamodules.ImageCaptionsDataModule import ImageCaptionsDataModule
-from ica.paraphraseator.callbacks.checkpoint_callback import checkpoint_callback
-from ica.paraphraseator.callbacks.LoggerCallback import LoggerCallback
-from ica.paraphraseator.callbacks.CheckpointEveryNSteps import CheckpointEveryNSteps
-from torch.utils.data import DataLoader, random_split
-from torchvision.transforms.transforms import Compose
+"""T5 paraphraser training and sampling decode."""
+
+from __future__ import annotations
+
 import os
-from pytorch_lightning.loggers import TensorBoardLogger
-from ica.utils.helpers import clean_sentence, annotate_sentence, encode_sentence, decode_sequence_of_tokens, \
-    generate_sequence_of_tokens
-from ica.utils.Encoding import Encoding
-from ica.paraphraseator.measures.GLEAU import GLEAU
 from dataclasses import dataclass
-from torch.tensor import Tensor
+from pathlib import Path
 
-import pdb
+import torch
+from pytorch_lightning import LightningModule, Trainer, seed_everything
+from pytorch_lightning.loggers import TensorBoardLogger
+from torch.optim import AdamW
+from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, get_linear_schedule_with_warmup
 
-seed_everything(42)
+from ica.config import TrainConfig, config_from_args
+from ica.paraphraseator.callbacks.CheckpointEveryNSteps import CheckpointEveryNSteps
+from ica.paraphraseator.datamodules.ImageCaptionsDataModule import ImageCaptionsDataModule
+from ica.paraphraseator.measures.GLEAU import GLEAU
+from ica.utils.Encoding import Encoding
+from ica.utils.helpers import (
+    annotate_sentence,
+    clean_sentence,
+    decode_sequence_of_tokens,
+    encode_sentence,
+    generate_kwargs_from_settings,
+    generate_sequence_of_tokens,
+)
+
+
+@dataclass
+class TrainResult:
+    global_step: int
+    train_loss: float
+    model_dir: str
+    captions: list[str]
+
+
+@dataclass
+class ParaphraseBatch:
+    texts: list[str]
+    token_ids: torch.Tensor
+
+
+def _as_float(value) -> float:
+    if hasattr(value, "detach"):
+        return float(value.detach().cpu())
+    return float(value)
+
+
+def metric_value(metrics, name: str) -> float:
+    for key in (name, f"{name}_step", f"{name}_epoch"):
+        if key in metrics:
+            return _as_float(metrics[key])
+    raise KeyError(name)
+
+
+def paraphrase_sentences(model, tokenizer, sentences: list[str], cfg: TrainConfig, device=None) -> ParaphraseBatch:
+    """Sample one paraphrase per sentence. token_ids has shape [N * num_return_sequences, L]."""
+    if not sentences:
+        return ParaphraseBatch(texts=[], token_ids=torch.empty(0, 0, dtype=torch.long))
+    annotated = [annotate_sentence(clean_sentence(sentence)) for sentence in sentences]
+    encoded = tokenizer(
+        annotated,
+        max_length=cfg.max_source_length,
+        padding=True,
+        truncation=True,
+        return_tensors="pt",
+    )
+    if device is not None:
+        encoded = {key: value.to(device) for key, value in encoded.items()}
+    settings = generate_kwargs_from_settings(
+        do_sample=cfg.do_sample,
+        top_k=cfg.top_k,
+        top_p=cfg.top_p,
+        early_stopping=cfg.early_stopping,
+        num_return_sequences=cfg.num_return_sequences,
+        max_new_tokens=cfg.max_new_tokens,
+        temperature=cfg.temperature,
+    )
+    # T5's generation config sets max_length; passing max_new_tokens alongside it errors.
+    generation_config = getattr(model, "generation_config", None)
+    if generation_config is not None and settings.get("max_new_tokens") is not None:
+        generation_config.max_length = None
+    token_ids = model.generate(
+        input_ids=encoded["input_ids"],
+        attention_mask=encoded["attention_mask"],
+        **settings,
+    )
+    texts = tokenizer.batch_decode(
+        token_ids,
+        skip_special_tokens=True,
+        clean_up_tokenization_spaces=True,
+    )
+    return ParaphraseBatch(texts=list(texts), token_ids=token_ids.detach().cpu())
+
+
+def paraphrase_saved(model_dir: str, sentences: list[str], cfg: TrainConfig) -> ParaphraseBatch:
+    tokenizer = AutoTokenizer.from_pretrained(model_dir)
+    model = AutoModelForSeq2SeqLM.from_pretrained(model_dir)
+    model.eval()
+    return paraphrase_sentences(model, tokenizer, sentences, cfg, device=torch.device("cpu"))
 
 
 class T5(LightningModule):
-    # required
-    def __init__(
-            self,
-
-            # model params
-            data_dir: str = 'data/raw',
-            logs_dir: str = 'data/logs',
-            cache_dir: str = 'data/cache',
-            checkpoints_dir: str = 'data/checkpoints',
-            model_name_or_path: str = 'ramsrigouthamg/t5_paraphraser',
-            batch_size: int = 16,
-            learning_rate: float = 3e-4,
-            adam_epsilon: float = 1e-8,
-            weight_decay: float = 0.0,
-            warmup_steps: int = 0,
-
-            checkpoint_to_load=None,
-
-            # training params
-            accumulate_grad_batches: int = 16,
-            max_epochs: int = 2,
-            gpus: int = 0,
-            num_workers: int = 8,
-            fp_16: bool = False,
-            amp_level: str = 'O2',
-            gradient_clip_val: float = 1.0,
-            **config_kwargs
-    ):
+    def __init__(self, cfg: TrainConfig):
         super().__init__()
-
-        self.model_name_or_path = model_name_or_path
-        self.data_dir = data_dir
-        self.cache_dir = cache_dir
-        self.logs_dir = logs_dir
-        self.checkpoints_dir = checkpoints_dir
-
-        self.checkpoint_to_load = checkpoint_to_load
-
-        os.makedirs(self.data_dir, exist_ok=True)
-        os.makedirs(self.cache_dir, exist_ok=True)
-        os.makedirs(self.logs_dir, exist_ok=True)
-        os.makedirs(self.checkpoints_dir, exist_ok=True)
-
-        self.learning_rate = learning_rate
-        self.adam_epsilon = adam_epsilon
-        self.weight_decay = weight_decay
-
-        self.batch_size = batch_size
-
-        # training
-        self.warmup_steps = warmup_steps
-        self.accumulate_grad_batches = accumulate_grad_batches
-        self.max_epochs = max_epochs
-        self.gpus = gpus
-        self.num_workers = num_workers
-        self.fp_16 = fp_16
-        self.amp_level = amp_level
-        self.gradient_clip_val = gradient_clip_val
-
-        self.logger = TensorBoardLogger(
-            save_dir=self.logs_dir,
-            name="",
-            # name=self.model_name_or_path,
-            version="",
-            default_hp_metric=False,
-            log_graph=False
+        self.cfg = cfg
+        self.save_hyperparameters(
+            {
+                "model_name_or_path": cfg.model_name_or_path,
+                "batch_size": cfg.batch_size,
+                "learning_rate": cfg.learning_rate,
+                "max_epochs": cfg.max_epochs,
+                "max_steps": cfg.max_steps,
+                "seed": cfg.seed,
+                "max_examples": cfg.max_examples,
+            }
         )
+        os.makedirs(cfg.data_dir, exist_ok=True)
+        os.makedirs(cfg.cache_dir, exist_ok=True)
+        os.makedirs(cfg.logs_dir, exist_ok=True)
+        os.makedirs(cfg.checkpoints_dir, exist_ok=True)
+        os.makedirs(cfg.output_dir, exist_ok=True)
 
-        # self.config = T5Config.from_pretrained(
-        #     pretrained_model_name_or_path=self.model_name_or_path,
-        # cache_dir=self.cache_dir
-        # )
-
-        self.tokenizer = T5Tokenizer.from_pretrained(
-            pretrained_model_name_or_path=self.model_name_or_path,
-            cache_dir=self.cache_dir
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            cfg.model_name_or_path,
+            cache_dir=cfg.cache_dir,
         )
-
-        self.model = T5ForConditionalGeneration.from_pretrained(
-            pretrained_model_name_or_path=self.model_name_or_path,
-            # config=self.config,
-            cache_dir=self.cache_dir
+        self.model = AutoModelForSeq2SeqLM.from_pretrained(
+            cfg.model_name_or_path,
+            cache_dir=cfg.cache_dir,
         )
-
         self.datamodule = ImageCaptionsDataModule(
-            batch_size=self.batch_size,
-            data_dir=self.data_dir,
             tokenizer=self.tokenizer,
-            num_workers=self.num_workers
+            batch_size=cfg.batch_size,
+            data_dir=cfg.data_dir,
+            num_workers=cfg.num_workers,
+            max_examples=cfg.max_examples,
+            max_source_length=cfg.max_source_length,
+            max_target_length=cfg.max_target_length,
+            datasets=list(cfg.datasets or []),
+            seed=cfg.seed,
+            train_fraction=cfg.train_fraction,
+            val_fraction=cfg.val_fraction,
         )
-
-        self.save_hyperparameters()
-        self.logger.log_hyperparams(params=self.hparams)
-
-        if self.checkpoint_to_load is not None and self.checkpoints_dir is not None:
-            self.resume_from_checkpoint = f'{self.checkpoints_dir}/{self.checkpoint_to_load}'
-        else:
-            self.resume_from_checkpoint = None
-
-        if self.checkpoints_dir is not None:
-            self.save_model_path = f'{self.checkpoints_dir}/{self.model_name_or_path}'
-
-    def forward(self,
-                input_ids,
-                attention_mask=None,
-                decoder_input_ids=None,
-                decoder_attention_mask=None,
-                labels=None,
-                ):
-        return self.model(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            decoder_input_ids=decoder_input_ids,
-            decoder_attention_mask=decoder_attention_mask,
-            labels=decoder_input_ids,
+        safe_name = cfg.model_name_or_path.replace("/", "--")
+        self.save_model_path = str(Path(cfg.checkpoints_dir) / safe_name)
+        self.total_steps = 1
+        self.tb_logger = TensorBoardLogger(
+            save_dir=cfg.logs_dir,
+            name="paraphraser",
+            default_hp_metric=False,
         )
+        self.tb_logger.log_hyperparams(params=self.hparams)
 
-    # required
-    def training_step(self, batch, batch_idx, dataloader_idx=None, hiddens=None):
-        loss, gleau = self.shared_step(batch)
-        self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
-        self.log('train_gleau', gleau, on_step=True, on_epoch=True, prog_bar=True, logger=True)
-        return loss
+    def forward(self, input_ids, attention_mask=None, labels=None):
+        return self.model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
 
-    # required
-    def validation_step(self, batch, batch_idx, dataloader_idx=None, hiddens=None):
-        loss, gleau = self.shared_step(batch)
-        self.log('val_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
-        self.log('val_gleau', gleau, on_step=True, on_epoch=True, prog_bar=True, logger=True)
-        return loss
+    def _loss(self, batch):
+        input_ids = batch["encoded_x"]["input_ids"]
+        attention_mask = batch["encoded_x"]["attention_mask"]
+        labels = batch["encoded_y"]["input_ids"].clone()
+        pad_id = self.tokenizer.pad_token_id
+        if pad_id is not None:
+            labels[labels == pad_id] = -100
+        return self.forward(input_ids=input_ids, attention_mask=attention_mask, labels=labels).loss
 
-        # required
-
-    def test_step(self, batch, batch_idx, dataloader_idx=None, hiddens=None):
-        loss, gleau = self.shared_step(batch)
-        self.log('test_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
-        self.log('test_gleau', gleau, on_step=True, on_epoch=True, prog_bar=True, logger=True)
-        return loss
-
-    def shared_step(self, batch) -> Seq2SeqModelOutput:
-
-        encoded_y = Encoding(**batch["encoded_y"])
-        encoded_x = Encoding(**batch["encoded_x"])
+    def _gleau(self, batch) -> torch.Tensor:
+        encoded_x = batch["encoded_x"]
         cleaned_y = batch["clean_y"]
+        scores = []
+        was_training = self.training
+        self.eval()
+        with torch.no_grad():
+            batch_size = encoded_x["input_ids"].size(0)
+            for index in range(batch_size):
+                encoded = Encoding(
+                    input_ids=encoded_x["input_ids"][index],
+                    attention_mask=encoded_x["attention_mask"][index],
+                )
+                predicted = self.generate_from_encoded(encoded)
+                target = cleaned_y[index]
+                scores.append(GLEAU(target, predicted))
+                if index == 0 and self.logger is not None:
+                    self.logger.experiment.add_text(
+                        "target / predicted",
+                        f"{target} / {predicted}",
+                    )
+        if was_training:
+            self.train()
+        return torch.tensor(scores, dtype=torch.float32).mean()
 
-        outputs = self.forward(
-            input_ids=encoded_x.input_ids.squeeze(),
-            attention_mask=encoded_x.attention_mask.squeeze(),
-            # labels=encoded_y.input_ids.squeeze(),
-            decoder_input_ids=encoded_y.input_ids.squeeze(),
-            decoder_attention_mask=encoded_y.attention_mask.squeeze(),
-        )
+    def training_step(self, batch, batch_idx):
+        loss = self._loss(batch)
+        batch_size = batch["encoded_x"]["input_ids"].size(0)
+        self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, batch_size=batch_size)
+        if self.cfg.compute_train_gleau:
+            gleau = self._gleau(batch)
+            self.log("train_gleau", gleau, on_step=True, on_epoch=True, prog_bar=True, batch_size=batch_size)
+        return loss
 
-        gleaus = []
+    def validation_step(self, batch, batch_idx):
+        loss = self._loss(batch)
+        batch_size = batch["encoded_x"]["input_ids"].size(0)
+        self.log("val_loss", loss, on_step=False, on_epoch=True, prog_bar=True, batch_size=batch_size)
+        if self.cfg.compute_train_gleau:
+            gleau = self._gleau(batch)
+            self.log("val_gleau", gleau, on_step=False, on_epoch=True, prog_bar=True, batch_size=batch_size)
+        return loss
 
-        def encoded_element_from_batch(i: int, encoded_collection):
-            encoded = Encoding(**dict(
-                input_ids=encoded_collection.input_ids[i],
-                attention_mask=encoded_collection.attention_mask[i]
-            ))
-            return encoded
-
-        for i in range(self.batch_size):
-            target_sentence = cleaned_y[i]
-            encoded = encoded_element_from_batch(i, encoded_x)
-            predicted_sentence = self.generate_from_encoded(encoded)
-
-            self.logger.experiment.add_text(
-                "target  \n predicted",
-                f'{target_sentence}  \n {predicted_sentence}'
-            )
-
-            gleau = GLEAU(target_sentence, predicted_sentence)
-            gleaus.append(gleau)
-
-        gleau = Tensor(gleaus).mean()
-        loss = outputs.loss
-
-        return loss, gleau
+    def test_step(self, batch, batch_idx):
+        loss = self._loss(batch)
+        batch_size = batch["encoded_x"]["input_ids"].size(0)
+        self.log("test_loss", loss, on_step=False, on_epoch=True, prog_bar=True, batch_size=batch_size)
+        return loss
 
     def setup(self, stage):
-        print(f'stage: {stage}')
-        data_per_device = self.datamodule.stage_len(stage) // (self.batch_size * max(1, self.gpus))
-        total_number_of_batches = self.accumulate_grad_batches * float(self.max_epochs)
-        self.total_steps = data_per_device // total_number_of_batches
-        print(f'total_steps: {self.total_steps}')
+        if stage in (None, "fit"):
+            self.total_steps = self.estimate_total_steps()
 
-    @property
-    def automatic_optimization(self) -> bool:
-        return False
+    def estimate_total_steps(self) -> int:
+        if self.cfg.max_steps and self.cfg.max_steps > 0:
+            return int(self.cfg.max_steps)
+        train_len = self.datamodule.stage_len("fit")
+        devices = max(1, self.cfg.gpus)
+        steps_per_epoch = max(1, train_len // max(1, self.cfg.batch_size * devices))
+        accum = max(1, self.cfg.accumulate_grad_batches)
+        return max(1, (steps_per_epoch // accum) * max(1, self.cfg.max_epochs))
 
-    # required
     def configure_optimizers(self):
-        """Prepare optimizer and schedule (linear warmup and decay)"""
         no_decay = ["bias", "LayerNorm.weight"]
-        parameters = [
-            {
-                "params": [
-                    param for name, param in self.model.named_parameters() if
-                    not any(no_decay_name in name for no_decay_name in no_decay)
-                ],
-                "weight_decay": self.weight_decay,
-            },
-            {
-                "params": [param for name, param in self.model.named_parameters() if
-                           any(no_decay_name in name for no_decay_name in no_decay)],
-                "weight_decay": 0.0,
-            },
-        ]
-        self.optimizer = AdamW(
-            parameters,
-            lr=self.learning_rate,
-            eps=self.adam_epsilon
+        named = list(self.model.named_parameters())
+        decay = [param for name, param in named if not any(skip in name for skip in no_decay)]
+        no_decay_params = [param for name, param in named if any(skip in name for skip in no_decay)]
+        groups = []
+        if decay:
+            groups.append({"params": decay, "weight_decay": self.cfg.weight_decay})
+        if no_decay_params:
+            groups.append({"params": no_decay_params, "weight_decay": 0.0})
+        optimizer = AdamW(groups, lr=self.cfg.learning_rate, eps=self.cfg.adam_epsilon)
+        scheduler = get_linear_schedule_with_warmup(
+            optimizer=optimizer,
+            num_warmup_steps=self.cfg.warmup_steps,
+            num_training_steps=max(1, self.total_steps),
         )
-        self.scheduler = get_linear_schedule_with_warmup(
-            optimizer=self.optimizer,
-            num_warmup_steps=self.warmup_steps,
-            num_training_steps=self.total_steps
-        )
-        scheduler = {
-            'scheduler': self.scheduler,
-            'interval': 'step',
-            'frequency': 1
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {"scheduler": scheduler, "interval": "step", "frequency": 1},
         }
-        return [self.optimizer], [self.scheduler]
 
-    def optimizer_step(
-            self,
-            epoch,
-            batch_idx,
-            optimizer,
-            optimizer_idx,
-            optimizer_closure,
-            on_tpu=False,
-            using_native_amp=False,
-            using_lbfgs=False
-    ):
-        if self.trainer.use_tpu:
-            xm.optimizer_step(optimizer)
-        else:
-            optimizer.step(closure=optimizer_closure)
-        optimizer.zero_grad()
-        self.scheduler.step()
+    def generate_from_encoded(self, encoded: Encoding) -> str:
+        settings = generate_kwargs_from_settings(
+            do_sample=self.cfg.do_sample,
+            top_k=self.cfg.top_k,
+            top_p=self.cfg.top_p,
+            early_stopping=self.cfg.early_stopping,
+            num_return_sequences=1,
+            max_new_tokens=self.cfg.max_new_tokens,
+            temperature=self.cfg.temperature,
+        )
+        sequence = generate_sequence_of_tokens(self.model, encoded, **settings)
+        return decode_sequence_of_tokens(self.tokenizer, sequence)
 
-    def generate_from_encoded(self, encoded):
-        sequence_of_tokens = generate_sequence_of_tokens(self.model, encoded)
-        return decode_sequence_of_tokens(self.tokenizer, sequence_of_tokens)
-
-    def generate_from_sentence(self, sentence):
+    def generate_from_sentence(self, sentence: str) -> str:
         cleaned = clean_sentence(sentence)
         annotated = annotate_sentence(cleaned)
-        encoded = encode_sentence(self.tokenizer, annotated)
+        encoded_dict = encode_sentence(self.tokenizer, annotated, max_length=self.cfg.max_source_length)
+        encoded = Encoding(**encoded_dict)
         return self.generate_from_encoded(encoded)
 
-    def train_model(self):
-        self.trainer = Trainer(
-            accumulate_grad_batches=self.accumulate_grad_batches,
-            max_epochs=self.max_epochs,
-            gpus=self.gpus,
-            precision=16 if self.fp_16 else 32,
-            amp_level=self.amp_level,
-            gradient_clip_val=self.gradient_clip_val,
+    def paraphrase(self, sentences: list[str]) -> ParaphraseBatch:
+        self.eval()
+        return paraphrase_sentences(self.model, self.tokenizer, sentences, self.cfg, device=self.device)
+
+    def train_model(self) -> TrainResult:
+        accelerator = "gpu" if self.cfg.gpus and self.cfg.gpus > 0 else "cpu"
+        devices = self.cfg.gpus if accelerator == "gpu" else 1
+        ckpt_path = None
+        if self.cfg.checkpoint_to_load:
+            ckpt_path = str(Path(self.cfg.checkpoints_dir) / self.cfg.checkpoint_to_load)
+        limit_val_batches = self.cfg.limit_val_batches
+        sanity_steps = self.cfg.num_sanity_val_steps
+        trainer = Trainer(
+            max_epochs=self.cfg.max_epochs,
+            max_steps=self.cfg.max_steps if self.cfg.max_steps and self.cfg.max_steps > 0 else -1,
+            accelerator=accelerator,
+            devices=devices,
+            precision="16-mixed" if self.cfg.fp_16 else "32-true",
+            accumulate_grad_batches=self.cfg.accumulate_grad_batches,
+            gradient_clip_val=self.cfg.gradient_clip_val,
             callbacks=[
-                # checkpoint_callback(checkpoints_dir=self.checkpoints_dir),
-                # LoggerCallback()
                 CheckpointEveryNSteps(
-                    save_step_frequency=self.accumulate_grad_batches * self.batch_size * 1,
-                    checkpoints_dir=self.checkpoints_dir
+                    save_step_frequency=self.cfg.accumulate_grad_batches * self.cfg.batch_size,
+                    checkpoints_dir=self.cfg.checkpoints_dir,
                 )
             ],
-            default_root_dir=self.logs_dir,
+            default_root_dir=self.cfg.logs_dir,
             log_every_n_steps=1,
-            logger=self.logger,
-            resume_from_checkpoint=self.resume_from_checkpoint
+            logger=self.tb_logger,
+            enable_checkpointing=False,
+            enable_progress_bar=self.cfg.enable_progress_bar,
+            limit_val_batches=limit_val_batches,
+            num_sanity_val_steps=sanity_steps,
+            enable_model_summary=False,
         )
-
-        self.trainer.fit(model=self, datamodule=self.datamodule)
+        trainer.fit(model=self, datamodule=self.datamodule, ckpt_path=ckpt_path)
         self.model.save_pretrained(self.save_model_path)
         self.tokenizer.save_pretrained(self.save_model_path)
-
-    def test_model(self):
-        self.trainer = Trainer(
-            accumulate_grad_batches=self.accumulate_grad_batches,
-            max_epochs=self.max_epochs,
-            gpus=self.gpus,
-            precision=16 if self.fp_16 else 32,
-            amp_level=self.amp_level,
-            gradient_clip_val=self.gradient_clip_val,
-            callbacks=[
-                # checkpoint_callback(checkpoints_dir=self.checkpoints_dir),
-                # LoggerCallback()
-            ],
-            default_root_dir=self.logs_dir,
-            log_every_n_steps=20,
-            logger=self.logger,
-            progress_bar_refresh_rate=60,
-            val_check_interval=0.25,
-            resume_from_checkpoint=self.resume_from_checkpoint
+        loss = metric_value(trainer.callback_metrics, "train_loss")
+        return TrainResult(
+            global_step=int(trainer.global_step),
+            train_loss=loss,
+            model_dir=self.save_model_path,
+            captions=list(self.datamodule.captions),
         )
 
-        self.trainer.test(model=self, datamodule=self.datamodule)
+
+def train_paraphraser(cfg: TrainConfig) -> TrainResult:
+    os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+    seed_everything(cfg.seed, workers=True)
+    for path in (cfg.data_dir, cfg.logs_dir, cfg.cache_dir, cfg.checkpoints_dir, cfg.output_dir):
+        os.makedirs(path, exist_ok=True)
+    return T5(cfg).train_model()
 
 
 def main():
-    t5 = T5(
-        # gpus=1,
-        num_workers=8,
-        # num_workers=4,
-        batch_size=2,
-        accumulate_grad_batches=2,
-        # data_dir="/content/drive/MyDrive/ica/data/raw",
-        # logs_dir="/content/drive/MyDrive/ica/data/logs",
-        # cache_dir="/content/drive/MyDrive/ica/data/cache",
-        # checkpoints_dir="/content/drive/MyDrive/ica/data/checkpoints",
-        # checkpoint_to_load="every=4_epoch=0_step=28.ckpt"
+    cfg = config_from_args()
+    result = train_paraphraser(cfg)
+    print(
+        f"global_step={result.global_step} train_loss={result.train_loss:.6f} model_dir={result.model_dir}"
     )
-
-    t5.train_model()
 
 
 if __name__ == "__main__":

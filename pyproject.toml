@@ -1,0 +1,56 @@
+[project]
+name = "ica"
+version = "0.0.20"
+description = "Augment remote-sensing image captions with a T5 paraphraser and measure the effect on a downstream captioner."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Pedro Rio", email = "pedrocacaisrio@gmail.com" }]
+dependencies = [
+    "datasets>=2.18",
+    "httpx>=0.27",
+    "nltk>=3.8",
+    "numpy>=1.26",
+    "pandas>=2.1",
+    "pillow>=10",
+    "protobuf>=4",
+    "pycocoevalcap>=1.2",
+    "pytorch-lightning>=2.2",
+    "pyyaml>=6",
+    "requests>=2.31",
+    "scikit-learn>=1.4",
+    "scipy>=1.11",
+    "sentence-transformers>=3.0",
+    "sentencepiece>=0.2",
+    "tensorboard>=2.14",
+    "toolz>=0.12",
+    "torch",
+    "torchvision",
+    "transformers>=4.41",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.0"]
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["ica*", "eval*"]
+
+[tool.uv]
+package = true
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+torchvision = { index = "pytorch-cpu" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

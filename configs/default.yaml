@@ -1,0 +1,41 @@
+# Local defaults. These paths work from a checkout; they do not use Colab Drive.
+data_dir: data/raw
+logs_dir: data/logs
+cache_dir: data/cache
+checkpoints_dir: data/checkpoints
+output_dir: data/output
+model_name_or_path: ramsrigouthamg/t5_paraphraser
+batch_size: 4
+learning_rate: 0.0003
+adam_epsilon: 1.0e-8
+weight_decay: 0.0
+warmup_steps: 0
+accumulate_grad_batches: 1
+max_epochs: 2
+max_steps: -1
+gpus: 0
+num_workers: 0
+fp_16: false
+gradient_clip_val: 1.0
+seed: 42
+max_examples: null
+max_source_length: 64
+max_target_length: 64
+compute_train_gleau: false
+limit_val_batches: 1
+num_sanity_val_steps: 0
+datasets:
+  - rsicd
+  - sydney
+  - ucm
+do_sample: true
+top_k: 120
+top_p: 0.98
+early_stopping: true
+num_return_sequences: 1
+max_new_tokens: 20
+temperature: 1.0
+checkpoint_to_load: null
+train_fraction: 0.7
+val_fraction: 0.2
+enable_progress_bar: true

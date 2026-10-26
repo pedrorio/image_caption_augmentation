@@ -1,0 +1,44 @@
+# Toy-scale pipeline check. Not a result.
+# Same captioner architecture as configs/full_ab.yaml. Smaller data, 1 captioner
+# epoch, t5-small, and 1 paraphraser step so it can run on CPU.
+scale: toy
+seed: 0
+captions_json: data/raw/dataset_rsicd_modified.json
+hf_dataset: arampacha/rsicd
+image_cache_dir: data/cache/rsicd_images
+output_json: results/toy_scale_pipeline_check.json
+max_images: 12
+min_captions_per_image: 2
+train_fraction: 0.7
+val_fraction: 0.15
+test_fraction: 0.15
+near_copy_jaccard: 0.8
+near_copy_bleu: 0.75
+meaning_model: sentence-transformers/all-MiniLM-L6-v2
+decision_alpha: 0.05
+paraphraser:
+  model_name_or_path: t5-small
+  max_steps: 1
+  max_epochs: 1
+  batch_size: 4
+  learning_rate: 0.0003
+  max_source_length: 32
+  max_target_length: 32
+  max_new_tokens: 12
+  do_sample: true
+  top_k: 50
+  top_p: 0.95
+  temperature: 1.0
+  early_stopping: true
+  num_return_sequences: 1
+  seed: 0
+  gpus: 0
+captioner:
+  epochs: 1
+  batch_size: 8
+  learning_rate: 0.001
+  embed_dim: 128
+  hidden_dim: 256
+  max_decode_len: 20
+  seeds: [0, 1, 2]
+  device: cpu

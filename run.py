@@ -1,12 +1,17 @@
-from ica.paraphraseator.T5 import T5
+"""Fine-tune the caption paraphraser from a YAML config and optional CLI overrides."""
 
-t5 = T5(
-        gpus=1,
-        num_workers=4,
-        batch_size=5,
-        data_dir="/content/drive/MyDrive/ica/data/raw",
-        logs_dir="/content/drive/MyDrive/ica/data/logs",
-        cache_dir="/content/drive/MyDrive/ica/data/cache",
-        checkpoints_dir="/content/drive/MyDrive/ica/data/checkpoints"
+from ica.config import config_from_args
+from ica.paraphraseator.T5 import train_paraphraser
+
+
+def main(argv=None):
+    cfg = config_from_args(argv)
+    result = train_paraphraser(cfg)
+    print(
+        f"global_step={result.global_step} train_loss={result.train_loss:.6f} model_dir={result.model_dir}"
     )
-t5.train_model()
+    return result
+
+
+if __name__ == "__main__":
+    main()

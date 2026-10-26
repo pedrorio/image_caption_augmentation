@@ -1,0 +1,45 @@
+# Full-scale protocol. Not run in the session that added this file.
+# Same captioner as the toy check (frozen ResNet-18 + GRU). More images,
+# more captioner epochs, five seeds, and the T5 paraphraser checkpoint.
+# Run on a GPU. See the README Colab cell.
+scale: full
+seed: 0
+captions_json: data/raw/dataset_rsicd_modified.json
+hf_dataset: arampacha/rsicd
+image_cache_dir: data/cache/rsicd_images
+output_json: results/full_ab.json
+max_images: null
+min_captions_per_image: 1
+train_fraction: 0.7
+val_fraction: 0.15
+test_fraction: 0.15
+near_copy_jaccard: 0.8
+near_copy_bleu: 0.75
+meaning_model: sentence-transformers/all-MiniLM-L6-v2
+decision_alpha: 0.05
+paraphraser:
+  model_name_or_path: ramsrigouthamg/t5_paraphraser
+  max_steps: -1
+  max_epochs: 2
+  batch_size: 8
+  learning_rate: 0.0003
+  max_source_length: 64
+  max_target_length: 64
+  max_new_tokens: 20
+  do_sample: true
+  top_k: 120
+  top_p: 0.98
+  temperature: 1.0
+  early_stopping: true
+  num_return_sequences: 1
+  seed: 0
+  gpus: 1
+captioner:
+  epochs: 5
+  batch_size: 32
+  learning_rate: 0.001
+  embed_dim: 128
+  hidden_dim: 256
+  max_decode_len: 20
+  seeds: [0, 1, 2, 3, 4]
+  device: cuda
