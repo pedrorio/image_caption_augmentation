@@ -1,10 +1,38 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
 **/__pycache__/
-lightning_logs/
-venv
-data
-archive
-build
-dist
-*.egg*
-old_data
+*.py[cod]
+*$py.class
 **/*.pyc
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg*
+.eggs/
+pip-wheel-metadata/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Test, model, and type-checker caches
+.cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local experiment artifacts. Tracked caption JSON under data/raw stays tracked.
+lightning_logs/
+data/
+/archive
+old_data
+
+# Editor and OS files
+.idea/
+.vscode/
+.DS_Store

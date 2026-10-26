@@ -1,0 +1,44 @@
+# Reproduces the hard-coded Google Colab entry point that used to live in run.py:
+#   data/logs/cache/checkpoints under /content/drive/MyDrive/ica/data
+#   batch size 5, 1 GPU, 4 workers, 2 epochs, grad accumulation 16
+#   sequence length 512 and per-step GLEU generation, as in the original trainer.
+data_dir: /content/drive/MyDrive/ica/data/raw
+logs_dir: /content/drive/MyDrive/ica/data/logs
+cache_dir: /content/drive/MyDrive/ica/data/cache
+checkpoints_dir: /content/drive/MyDrive/ica/data/checkpoints
+output_dir: /content/drive/MyDrive/ica/data/output
+model_name_or_path: ramsrigouthamg/t5_paraphraser
+batch_size: 5
+learning_rate: 0.0003
+adam_epsilon: 1.0e-8
+weight_decay: 0.0
+warmup_steps: 0
+accumulate_grad_batches: 16
+max_epochs: 2
+max_steps: -1
+gpus: 1
+num_workers: 4
+fp_16: false
+gradient_clip_val: 1.0
+seed: 42
+max_examples: null
+max_source_length: 512
+max_target_length: 512
+compute_train_gleau: true
+limit_val_batches: 1.0
+num_sanity_val_steps: 2
+datasets:
+  - rsicd
+  - sydney
+  - ucm
+do_sample: true
+top_k: 120
+top_p: 0.98
+early_stopping: true
+num_return_sequences: 1
+max_new_tokens: 20
+temperature: 1.0
+checkpoint_to_load: null
+train_fraction: 0.7
+val_fraction: 0.2
+enable_progress_bar: true

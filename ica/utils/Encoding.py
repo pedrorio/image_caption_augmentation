@@ -1,5 +1,6 @@
 from dataclasses import dataclass
-from torch.tensor import Tensor
+
+from torch import Tensor
 
 
 @dataclass
