@@ -1,0 +1,45 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      HF_HOME: ${{ github.workspace }}/.cache/huggingface
+      HF_HUB_DISABLE_TELEMETRY: "1"
+      TOKENIZERS_PARALLELISM: "false"
+      OMP_NUM_THREADS: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Java for pycocoevalcap PTB tokenizer
+        run: |
+          if ! command -v java >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y default-jre-headless
+          fi
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            .cache/huggingface
+            data/cache
+          key: hf-${{ runner.os }}-t5-small-v1
+
+      - name: Install locked dependencies
+        run: uv sync --frozen --all-groups
+
+      - name: NLTK tokenizers
+        run: uv run python -c "import nltk; nltk.download('punkt', quiet=True); nltk.download('punkt_tab', quiet=True)"
+
+      - name: Pytest
+        run: uv run pytest -q
