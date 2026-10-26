@@ -1,0 +1,260 @@
+{
+  "scale": "toy",
+  "label": "toy-scale pipeline check, not a result",
+  "dataset": {
+    "captions_json": "data/raw/dataset_rsicd_modified.json",
+    "hf_images": "arampacha/rsicd",
+    "split_source": "image split field in the caption JSON, before paraphrasing",
+    "n_train_images": 8,
+    "n_val_images": 2,
+    "n_test_images": 2,
+    "train_image_ids": [
+      "square_279.jpg",
+      "00801.jpg",
+      "farmland_11.jpg",
+      "desert_267.jpg",
+      "00554.jpg",
+      "00466.jpg",
+      "port_339.jpg",
+      "viaduct_339.jpg"
+    ],
+    "val_image_ids": [
+      "storagetanks_358.jpg",
+      "baseballfield_61.jpg"
+    ],
+    "test_image_ids": [
+      "storagetanks_99.jpg",
+      "00723.jpg"
+    ],
+    "min_captions_per_image": 2
+  },
+  "paraphraser": {
+    "model_name_or_path": "t5-small",
+    "max_steps": 1,
+    "max_epochs": 1,
+    "do_sample": true,
+    "top_k": 50,
+    "top_p": 0.95,
+    "temperature": 1.0,
+    "max_new_tokens": 12,
+    "num_return_sequences": 1
+  },
+  "captioner": {
+    "architecture": "frozen ImageNet ResNet-18 (fc removed) + one-layer GRU",
+    "epochs": 1,
+    "batch_size": 8,
+    "learning_rate": 0.001,
+    "embed_dim": 128,
+    "hidden_dim": 256,
+    "max_decode_len": 20,
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "device": "cpu",
+    "vocab_size": 205
+  },
+  "leakage": {
+    "train_test_image_overlap": 0,
+    "test_images_paraphrased_for_training": 0,
+    "shared_generic_caption_strings": 0,
+    "note": "RSICD repeats generic sentences across images. shared_generic_caption_strings counts those overlaps. The guard fails if a test image id is paraphrased into training."
+  },
+  "paraphrase_quality": {
+    "meaning_cosine": 0.7393929362297058,
+    "self_bleu4_vs_source": 0.3233471121699671,
+    "source_unigram_jaccard_mean": 0.43934589220303505,
+    "exact_copy_rate": 0.14285714285714285,
+    "near_copy_rate": 0.14285714285714285,
+    "n": 7.0
+  },
+  "quality_examples": [
+    {
+      "source": "there is a factory beside the river .",
+      "paraphrase": "There is a factory beside the river."
+    },
+    {
+      "source": "there are many storage tanks in the factory .",
+      "paraphrase": "Es sind viele Lager- tanks in die Fab."
+    },
+    {
+      "source": "there are four baseball fields in the four corner of the field .",
+      "paraphrase": "Der front half of the field consists of 4 baseball fields"
+    },
+    {
+      "source": "there are four baseball field of different size lying on the lawn around which are some other sports courts  trees  roads and houses.",
+      "paraphrase": "A baseball field of different size lying on the lawn are located"
+    },
+    {
+      "source": "four baseball field next to some tennis court and surrounded by some trees .",
+      "paraphrase": "Four pitches just next to a tennis court."
+    },
+    {
+      "source": "four baseball field in different sizes are surrounded by several tennis courts and trees and a row of houses.",
+      "paraphrase": "Einige baseball field s\u00fce de 4 verschiedene Gr\u00f6\u00dfe"
+    },
+    {
+      "source": "several green trees and buildings are around four baseball fields in different sizes .",
+      "paraphrase": ": Green trees and buildings are around four baseball fields in"
+    }
+  ],
+  "downstream": {
+    "per_seed": [
+      {
+        "seed": 0,
+        "A": {
+          "bleu4": 2.1533208540230568e-13,
+          "rouge_l": 0.16038111567123878,
+          "cider": 0.03261535952197393
+        },
+        "B": {
+          "bleu4": 1.544449777793687e-05,
+          "rouge_l": 0.30056620038399745,
+          "cider": 0.2591989211116662
+        },
+        "B_minus_A": {
+          "bleu4": 1.5444497562604785e-05,
+          "rouge_l": 0.14018508471275867,
+          "cider": 0.22658356158969228
+        },
+        "hypotheses": {
+          "A": [
+            "a a a a a a across a bridge a bridge is around a across a bridge is around a",
+            "a a a a a a across a bridge a bridge is around a across a bridge is around a"
+          ],
+          "B": [
+            "a a a a playground with two basketball field is surrounded by some trees and buildings",
+            "a a a a playground a playground with two basketball field is surrounded by some trees and buildings"
+          ]
+        }
+      },
+      {
+        "seed": 1,
+        "A": {
+          "bleu4": 1.2803722402439778e-09,
+          "rouge_l": 0.16038111567123878,
+          "cider": 0.04904812775268767
+        },
+        "B": {
+          "bleu4": 1.8255137118388308e-09,
+          "rouge_l": 0.20853786816269287,
+          "cider": 0.18585041155048915
+        },
+        "B_minus_A": {
+          "bleu4": 5.45141471594853e-10,
+          "rouge_l": 0.0481567524914541,
+          "cider": 0.13680228379780146
+        },
+        "hypotheses": {
+          "A": [
+            "a a a playground with a playground with courts a bridge viele viele have un un badminton buildings badminton to",
+            "a a a playground with a playground with courts a bridge viele viele have un un badminton buildings badminton to"
+          ],
+          "B": [
+            "a a a playground with a playground with basketball fields next to to it is semi desert",
+            "a a playground with a playground with basketball fields next to to"
+          ]
+        }
+      },
+      {
+        "seed": 2,
+        "A": {
+          "bleu4": 5.93420260935575e-13,
+          "rouge_l": 0.1918238993710692,
+          "cider": 0.14176420721646513
+        },
+        "B": {
+          "bleu4": 1.3400825781415383e-09,
+          "rouge_l": 0.16038111567123878,
+          "cider": 0.04003564490566845
+        },
+        "B_minus_A": {
+          "bleu4": 1.3394891578806027e-09,
+          "rouge_l": -0.03144278369983042,
+          "cider": -0.10172856231079667
+        },
+        "hypotheses": {
+          "A": [
+            "a a a a bridge bridge green trees are",
+            "a a a a bridge bridge green trees are"
+          ],
+          "B": [
+            "a a a playground with a playground with basketball field in in in in in a playground with basketball field",
+            "a a a playground with a playground with basketball field in in in in in a playground with basketball field"
+          ]
+        }
+      }
+    ],
+    "summary": {
+      "A": {
+        "bleu4": {
+          "mean": 4.2706033086343857e-10,
+          "sd": 7.389898150554331e-10
+        },
+        "rouge_l": {
+          "mean": 0.17086204357118226,
+          "sd": 0.018153499633168268
+        },
+        "cider": {
+          "mean": 0.0744758981637089,
+          "sd": 0.058849777988668014
+        }
+      },
+      "B": {
+        "bleu4": {
+          "mean": 5.1492211247422835e-06,
+          "sd": 8.915971123959016e-06
+        },
+        "rouge_l": {
+          "mean": 0.22316172807264303,
+          "sd": 0.07122750489087917
+        },
+        "cider": {
+          "mean": 0.16169499252260794,
+          "sd": 0.11156051546423586
+        }
+      },
+      "B_minus_A": {
+        "bleu4": {
+          "mean": 5.14879406441142e-06,
+          "sd": 8.916340788113719e-06
+        },
+        "rouge_l": {
+          "mean": 0.05229968450146078,
+          "sd": 0.08588890625797899
+        },
+        "cider": {
+          "mean": 0.08721909435889902,
+          "sd": 0.16967935107494095
+        }
+      }
+    },
+    "decision": {
+      "mean_diff": 0.08721909435889902,
+      "sd_diff": 0.16967935107494095,
+      "p_value": 0.46723676320198565,
+      "alpha": 0.05,
+      "within_noise": true,
+      "p_greater_than_alpha": true,
+      "augmentation_did_not_help": true,
+      "applicable": false,
+      "action": "not applied",
+      "note": "toy-scale pipeline check; the archive rule applies only to a full-scale run",
+      "rule": "On a full-scale run, augmentation did not help and the repository should be archived if |mean CIDEr B-A| < 1 sample sd of the per-seed differences, or a paired test of those differences against zero has p > 0.05."
+    }
+  },
+  "test_references": [
+    [
+      "green grass a few white spherical storage tank .",
+      "there are several round pit green grass .",
+      "some white storage tanks are surrounded by green meadow ."
+    ],
+    [
+      "this is a bright football field with grassland and parking lot surrounding .",
+      "a parking lot is near a playground .",
+      "a playground is surrounded by green meadows and a parking lot .",
+      "a playground surrounded by large piece of meadow is beside a parking lot ."
+    ]
+  ]
+}
